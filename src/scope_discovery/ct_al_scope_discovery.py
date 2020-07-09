@@ -25,21 +25,17 @@ logging.getLogger('boto3').setLevel(logging.CRITICAL)
 logging.getLogger('botocore').setLevel(logging.CRITICAL)
 
 session = boto3.Session()
-tag_keyword = str(os.environ['tag_keys']).replace(" ", "").split(",")
-tag_value = str(os.environ['tag_public_values']).replace(" ", "").split(",")
-registration_topic = os.environ['RegistrationSNS']
 
 def is_protected(asset, tags):
     for tag in asset['Tags']:
         if f"{tag['Key']}:{tag['Value']}" in tags:
-        # if tag['Key'] in tag_keyword and tag['Value'] in tag_value:
             return True
     return False
-    
-    
+
+
 def get_asset_key(region, type, id):
     return f'/aws/{region}/{type}/{id}'
-    
+
 def get_vpcs_scope(client, tags, scope=[], next_token=None):
     type = 'vpc'
     tag_keys = [v.split(':')[0] for v in tags.split(',')]
@@ -49,11 +45,12 @@ def get_vpcs_scope(client, tags, scope=[], next_token=None):
                     'Values': tag_keys
                 }
             ]
+    kwargs = {'Filters': Filters, 'MaxResults': 100}
     if next_token:
-        response = client.describe_vpcs(Filters=Filters, MaxResults=100, NextToken=next_token)
-    else:
-        response = client.describe_vpcs(Filters=Filters, MaxResults=100)
-        
+        kwargs['NextToken'] = NextToken
+    
+    response = client.describe_vpcs(**kwargs)
+
     scope.extend(
         [
             {
@@ -68,8 +65,8 @@ def get_vpcs_scope(client, tags, scope=[], next_token=None):
             scope, client, tags, scope, response['NextToken'])
     else:
         return scope
-    
-        
+
+
 def cfnresponse_send(
         event, context, responseStatus, responseData,
         physicalResourceId=None, noEcho=False):
@@ -99,34 +96,39 @@ def cfnresponse_send(
         LOGGER.info("CFN Response Status code: " + response.reason)
     except Exception as e:
         LOGGER.info("CFN Response Failed: " + str(e))
-        
-        
+
+
 def lambda_handler(event, context):
     try:
         LOGGER.info(f'Lambda Handler - Start')
         LOGGER.info('REQUEST RECEIVED: {}'.format(json.dumps(event, default=str)))
 
         if event['RequestType'] == 'Create':
-            client = session.client('ec2')
-            
-            tags = event['ResourceProperties']['CoverageTags']
-            scope = get_vpcs_scope(
-                client,
-                event['ResourceProperties']['CoverageTags']
-            )
-            
-            LOGGER.info(f'Protection Scope: {scope}')
-            
-            client = session.client('sns')
-            response = client.publish(
-                TopicArn=registration_topic,
-                Message=json.dumps({
-                    'RequestType': 'UpdateScope',
-                    'scope': scope,
-                    'account_id': str(context.invoked_function_arn).split(":")[4]
-                })
-            )
-        
+            if event['ResourceProperties']['FullRegionCoverage'].lower() != 'true':
+                client = session.client('ec2')
+
+                tags = event['ResourceProperties']['CoverageTags']
+                scope = get_vpcs_scope(
+                    client,
+                    event['ResourceProperties']['CoverageTags']
+                )
+
+                LOGGER.info(f'Protection Scope: {scope}')
+                topic_arn = event['ResourceProperties']['RegistrationSNS']
+                client = session.client('sns', region_name = topic_arn.split(":")[3])
+                response = client.publish(
+                    TopicArn=topic_arn,
+                    Message=json.dumps({
+                        'RequestType': 'UpdateScope',
+                        'scope': scope,
+                        'account_id': str(context.invoked_function_arn).split(":")[4]
+                    })
+                )
+            else:
+                LOGGER.info("Running in full region coverage mode. Skipping scope discovery.")
+        else:
+            LOGGER.info("Unsupported event. Skipping scope discovery.")
+
         response_data = {}
         response_data['event'] = event
         cfnresponse_send(
@@ -134,7 +136,7 @@ def lambda_handler(event, context):
                 'SUCCESS', response_data, "CustomResourcePhysicalID")
 
         LOGGER.info('Lambda Handler - End')
-        
+
     except Exception as e:
         LOGGER.exception(e)
         response_data = {}
