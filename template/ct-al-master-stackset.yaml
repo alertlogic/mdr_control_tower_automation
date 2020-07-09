@@ -83,11 +83,6 @@ Parameters:
 
 Mappings: 
   LambdaVariable:
-    Tag:
-      KeyList: ["al", "alertlogic", "tm", "threatmanager"]
-      Key: "al, alertlogic, tm, threatmanager"
-      PublicValue: "enable, active, true, yes, public"
-      PrivateValue: "private"      
     Role:
       Hub: AlertLogic-Hub-Assume-Role
       Spoke: AlertLogic-Hub-Role
@@ -109,6 +104,11 @@ Conditions:
   OriginRegion: !Equals 
     - !Ref MasterRegion
     - !Ref AWS::Region
+
+  NonOriginRegion: !Not
+    - !Equals
+      - !Ref MasterRegion
+      - !Ref AWS::Region
 
   NonSecurityAccount: !Not
     - !Equals
@@ -215,7 +215,7 @@ Resources:
   ALScopeDiscoveryRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ['-', ['AlertLogic-ScopeDiscovery-Role', !Ref AlertLogicApiEndpoint]]
+      RoleName: !Join ['-', ['AlertLogic-ScopeDiscovery-Role', !Ref AlertLogicApiEndpoint, !Ref "AWS::Region"]]
       Description: CT AL - Role used by lambda for discovering AlertLogic MDR protection scope
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -274,16 +274,13 @@ Resources:
       ReservedConcurrentExecutions: 10
       Environment:
         Variables:
-            tag_keys: !FindInMap ["LambdaVariable", "Tag", "Key"]
-            tag_public_values: !FindInMap ["LambdaVariable", "Tag", "PublicValue"]
-            tag_private_values: !FindInMap ["LambdaVariable", "Tag", "PrivateValue"]
             RegistrationSNS: !Ref RegistrationSNS
 
   ALDeployerRole:
-    Condition: SecurityAccountOriginRegion
+    Condition: SecurityAccount
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ['-', [!FindInMap [LambdaVariable,Role, Deployer], !Ref AlertLogicApiEndpoint]]
+      RoleName: !Join ['-', [!FindInMap [LambdaVariable,Role, Deployer], !Ref AlertLogicApiEndpoint, !Ref "AWS::Region"]]
       Description: CT AL - Role used by lambda for AlertLogic appliance deployment
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -339,9 +336,6 @@ Resources:
             master_account: !Ref MasterAccount
             master_role: !FindInMap [LambdaVariable,Role, Hub]
             org_id: !Ref OrgId
-            tag_keys: !FindInMap ["LambdaVariable", "Tag", "Key"]
-            tag_public_values: !FindInMap ["LambdaVariable", "Tag", "PublicValue"]
-            tag_private_values: !FindInMap ["LambdaVariable", "Tag", "PrivateValue"]
             secret: !Ref Secret
             FullRegionCoverage: !Ref FullRegionCoverage
             CoverageTags: !Join [ ",", !Ref CoverageTags]
@@ -382,7 +376,6 @@ Resources:
             "Tag Change on Resource"
           ],
           "detail": {
-            "changed-tag-keys": !FindInMap [LambdaVariable, Tag, KeyList],
             "service": [
               "ec2"
             ],
@@ -446,6 +439,7 @@ Resources:
       SourceArn: !GetAtt ALDeployerTagLocalRule.Arn
 
   ScopeDiscoveryAL:
+    Condition: NonOriginRegion
     Type: "AWS::CloudFormation::CustomResource"
     Properties:
       ServiceToken: !GetAtt ALScopeDiscovery.Arn
@@ -453,12 +447,20 @@ Resources:
       FullRegionCoverage: !Ref FullRegionCoverage
       CoverageTags: !Join [ ",", !Ref CoverageTags]
 
+  ScopeDiscoveryALMasterRegion:
+    Condition: OriginRegion
+    Type: "AWS::CloudFormation::CustomResource"
+    Properties:
+      ServiceToken: !GetAtt ALScopeDiscovery.Arn
+      RegistrationSNS: !Ref RegistrationSNS
+      FullRegionCoverage: !Ref FullRegionCoverage
+      CoverageTags: !Join [ ",", !Ref CoverageTags]
+    DependsOn:
+    - RegisterRole
+
 Outputs:
   ExternalId:
     Value:
       Ref: AlertLogicCustomerId
     Description: An external ID identifies Alert Logic as allowed access to the AWS
       resources defined in this IAM Role.
-  RoleArn:
-    Value: !GetAtt ALRoleFromCFT.Outputs.RoleARN
-    Description: Alert Logic Access Role

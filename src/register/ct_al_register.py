@@ -26,7 +26,7 @@ LOGGER.setLevel(logging.INFO)
 almdrlib.set_logger('almdrlib', logging.INFO)
 
 global_endpoint = os.environ.get('AlertLogicApiEndpoint', 'production').lower()
-region_coverage = os.environ['FullRegionCoverage'] == 'true'
+region_coverage = os.environ['FullRegionCoverage'].lower() == 'true'
 regions = str(os.environ['TargetRegion']).replace(" ", "").split(",")
 
 session = boto3.Session()
@@ -125,14 +125,16 @@ def get_scope(policy_id, scope):
     if not policy_id:
         return []
         
-    return [{
-                'key': asset_key,
-                'type': 'region',
+    return [
+            {
+                'key': asset['key'],
+                'type': asset['type'],
                 'policy': {
                     'id': policy_id
                 }
             }
-            for asset_key in scope]
+            for asset in scope
+        ]
 
 
 def handle_update_notification(session, context, sns_event):
@@ -162,7 +164,9 @@ def handle_update_notification(session, context, sns_event):
             deployments_client,
             auth['ALCID'], 
             sns_event['account_id'])
-        if not deployment: return
+        if not deployment:
+            LOGGER.info(f"Deployment {sns_event['account_id']} for customer {auth['ALCID']} not found.")
+            return
     
         # Get protection policy ID
         policy_id = get_policy_id(
@@ -277,11 +281,17 @@ def lambda_handler(event, context):
         if sns_event['RequestType'] == 'Create':
             response_data = {}
             response_data["event"] = event
+            include_scope = []
+            if region_coverage:
+                include_scope = [
+                        {'key': f'/aws/{region}', 'type': 'region'}
+                        for region in regions
+                    ]
             handle_create_notification(
                 session,
                 context,
                 sns_event,
-                [f'/aws/{region}' for region in regions],
+                include_scope,
                 response_data
             )
         elif sns_event['RequestType'] == 'UpdateScope':

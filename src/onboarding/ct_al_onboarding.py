@@ -148,64 +148,6 @@ def cfnresponse_send(
         LOGGER.info("CFN Response Failed: " + str(e))
 
 
-def log_archive_sqs_handler(target_session, region, event):
-    '''
-    Setup Alert Logic SQS Queue to receive CloudTrail updates
-    '''
-    try:
-        sqs_client = target_session.client('sqs')
-        sqs_response = sqs_client.create_queue(
-            QueueName='outcomesbucket-' + str(event['ResourceProperties']['AlertLogicCustomerId'])
-        )
-        if sqs_response:
-            LOGGER.info("SQS : {}".format(sqs_response))
-
-            sqs_policy_template['Statement'][0]['Resource'] = 'arn:aws:sqs:' + str(region) + ':' + str(event['ResourceProperties']['LogArchiveAccount']) + ':outcomesbucket-' + str(event['ResourceProperties']['AlertLogicCustomerId'])
-            sqs_policy_template['Statement'][0]['Condition']['ArnEquals']['aws:SourceArn'] = 'arn:aws:sns:' + str(region) + ':' + str(event['ResourceProperties']['AuditAccount']) + ':' + sns_name
-            LOGGER.info("SQS Policy : {}".format(sqs_policy_template))
-
-            sqs_client.set_queue_attributes(
-                QueueUrl=sqs_response['QueueUrl'],
-                Attributes={
-                    'Policy': str(json.dumps(sqs_policy_template))
-                }
-            )
-
-            sns_client = target_session.client('sns')
-            sns_response = sns_client.subscribe(
-                TopicArn='arn:aws:sns:' + str(region) + ':' + str(event['ResourceProperties']['AuditAccount']) + ':' + sns_name,
-                Protocol='sqs',
-                Endpoint='arn:aws:sqs:' + str(region) + ':' + str(event['ResourceProperties']['LogArchiveAccount']) + ':outcomesbucket-' + str(event['ResourceProperties']['AlertLogicCustomerId']),
-                ReturnSubscriptionArn=True
-            )
-            LOGGER.info("SQS to SNS subscription: {}".format(sns_response))
-
-        else:
-            LOGGER.warning("Unable to create SQS Queue, data refresh only happen every 24 hours unless if you fix this")
-        return True
-    except Exception as e:
-        LOGGER.error(e)
-        return False
-
-
-def audit_sns_handler(target_session, region, event):
-    '''
-    Enalbe SNS Subscription for Alert Logic SQS Queue
-    '''
-    try:
-        sns_client = target_session.client('sns')
-        sns_client.add_permission(
-            TopicArn='arn:aws:sns:' + str(region) + ':' + str(event['ResourceProperties']['AuditAccount']) + ':' + sns_name,
-            Label='AlertLogicSQS',
-            AWSAccountId=[str(event['ResourceProperties']['LogArchiveAccount'])],
-            ActionName=['Subscribe']
-        )
-        return True
-    except Exception as e:
-        LOGGER.error(e)
-        return False
-
-
 def create_stack_set(target_session, region, stackset_name, stackset_url, parameter_list, admin_role, exec_role, capabilities_list):
     '''
     Crate Stack Set function.
@@ -258,7 +200,20 @@ def get_output_value(results, account_id, region, name):
         if v['OutputKey'] == name:
             return v['OutputValue']
     return None
-                
+
+
+def get_regions(master_region_name, regions):
+    '''
+    Order regions with master region being the first one
+    '''
+    regions = [
+        region.strip()
+        for region in regions if region.strip() != master_region_name
+    ]
+    regions[:0] = [master_region_name]
+    return regions
+
+
 def dict_to_param_list(payload, type=MASTER_TYPE):
     stackset_param_list = []
     if type not in stackset_params_map:
@@ -291,12 +246,12 @@ def get_ci_role_cft_url(target_session, role_type, region, event):
     auth = json.loads(al_credentials)
     LOGGER.info(f"Initializing client for {auth['ALAccessKey']} using {global_endpoint} endpoint")
     themis_client = almdrlib.client(
-            'themis', 
+            'themis',
             access_key_id=auth['ALAccessKey'],
             secret_key=auth['ALSecretKey'],
             global_endpoint=global_endpoint
         )
-    
+
     response = themis_client.get_role(
             account_id=event['ResourceProperties']['AlertLogicCustomerId'],
             platform_type='aws',
@@ -321,10 +276,11 @@ def get_protected_accounts(included_ou_list, excluded_ou_list, master_account, c
             while True:
                 response = orgs_client.list_accounts(**kwargs)
                 accounts.update([
-                        account['Id'] 
+                        account['Id']
                         for account in response['Accounts'] if account['Status'] == 'ACTIVE' and account['Id'] != master_account
                     ])
-                if not 'NextToken' in response: break
+                if 'NextToken' not in response:
+                    break
                 kwargs['NextToken'] = response['NextToken']
         else:
             for parent_id in included_ou_list:
@@ -332,12 +288,13 @@ def get_protected_accounts(included_ou_list, excluded_ou_list, master_account, c
                 while True:
                     response = orgs_client.list_accounts_for_parent(**kwargs)
                     accounts.update([
-                            account['Id'] 
+                            account['Id']
                             for account in response['Accounts'] if account['Status'] == 'ACTIVE'and account['Id'] != master_account
                         ])
-                    if not 'NextToken' in response: break
+                    if 'NextToken' not in response:
+                        break
                     kwargs['NextToken'] = response['NextToken']
-                    
+
         return list(accounts.difference(core_accounts))
     except Exception as e:
         LOGGER.error("Could not list accounts for parent : {}".format(e))
@@ -368,7 +325,8 @@ def create_stack_instance(
             kwargs['ParameterOverrides'] = parameter_overrides
         if allow_failures:
             kwargs['OperationPreferences'] = {'FailureTolerancePercentage': 100}
-            
+
+        LOGGER.info(f"Create stack instances parameters: {kwargs}")
         response = cfn_client.create_stack_instances(**kwargs)
         operation_id = response["OperationId"]
         LOGGER.debug(response)
@@ -491,17 +449,6 @@ def lambda_handler(event, context):
             region = str(context.invoked_function_arn).split(":")[3]
             account = str(context.invoked_function_arn).split(":")[4]
 
-            #
-            # Enable SQS subscription from LogArchiveAccount to
-            # 'aws-controltower-AllConfigNotifications' SNS Topic in AuditAccount
-            #
-
-            # audit_account_session = assume_role(audit_account, 'AWSControlTowerExecution', event['ResourceProperties']['OrgId'])
-            # audit_sns_handler(audit_account_session, region, event)
-
-            # log_archive_session = assume_role(log_archive_account, 'AWSControlTowerExecution', event['ResourceProperties']['OrgId'])
-            # log_archive_sqs_handler(log_archive_session, region, event)
-
             registration_sns, secret = security_account_setup_handler(session, account, region, event)
 
             # Create and deploy Central CloudTrail Log Collection StackSet
@@ -577,7 +524,7 @@ def lambda_handler(event, context):
                         "ParameterValue": secret
                     }
                 ])
-                
+
             stackset_name = event['ResourceProperties']['StackSetName']
             LOGGER.info(f"Creating {stackset_name} stackset with {stackset_param_list} parameters")
             stackset_result = create_stack_set(
@@ -599,7 +546,10 @@ def lambda_handler(event, context):
                 # to publish registration request
                 core_accounts = set([security_account, log_archive_account, audit_account])
                 accounts = list(core_accounts.difference({audit_account}))
-                regions = str(event['ResourceProperties']['TargetRegion']).split(",")
+                regions = get_regions(
+                        region,
+                        str(event['ResourceProperties']['TargetRegion']).split(",")
+                    )
 
                 # Deploy stackset to core accounts
                 create_stack_instance(
@@ -619,7 +569,7 @@ def lambda_handler(event, context):
                         org_id=org_id,
                         accounts=[log_archive_account],
                         regions=regions,
-                        parameter_overrides = [
+                        parameter_overrides=[
                                 {
                                     "ParameterKey": "AlertLogicCentralizedRoleArn",
                                     "ParameterValue": ci_x_audit_account_role_arn
