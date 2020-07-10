@@ -345,7 +345,7 @@ Resources:
     Condition: SecurityAccount
     Type: AWS::Events::EventBus
     Properties:
-      Name: !Join ['-', [!FindInMap [EventBridge, EventBus, Name], !Ref AlertLogicApiEndpoint]]
+      Name: !Join ['', [!FindInMap [EventBridge, EventBus, Name], !Ref AlertLogicApiEndpoint]]
 
   ALEventBusPolicy:
     Condition: SecurityAccount

@@ -33,17 +33,11 @@ global_endpoint = os.environ.get('AlertLogicApiEndpoint', 'production').lower()
 region_coverage = os.environ['FullRegionCoverage'] == 'true'
 coverage_tags = str(os.environ['CoverageTags']).replace(" ", "").split(",")
 
-def parse_tags(tags):
-    result = {}
-    for tag in tags:
-        v = tag.split(":")
-        result[v[0].lower()] = v[1].lower()
-        
-    return result
-        
 
-def get_secret(target_session, region, secret_name):
-    secret_client = target_session.client('secretsmanager')
+def get_secret(target_session, secret_name):
+    region_name = str(secret_name).split(":")[3]
+
+    secret_client = target_session.client('secretsmanager', region_name=region_name)
     try:
         get_secret_value_response = secret_client.get_secret_value(
             SecretId=secret_name
@@ -71,10 +65,9 @@ def update_scope(scope, region, resource_type, resources, add=True, policy_id=No
                 resource.split(":")[5].split("/")[1]
             )
         for asset in scope:
-            if asset['key'] == asset_key:
-                if not add:
+            if asset['key'] == asset_key and not add:
                     scope.remove(asset)
-                    return scope
+                    break
                     
         if add:
             scope.append(
@@ -137,7 +130,6 @@ def lambda_handler(event, context):
             # Get Alert Logic API Credentials
             al_credentials = get_secret(
                 session,
-                str(context.invoked_function_arn).split(":")[4],
                 os.environ['secret'])
             if not al_credentials:
                 LOGGER.error("Unable to retrieve the AlertLogic API credentials")
@@ -168,31 +160,21 @@ def lambda_handler(event, context):
                 LOGGER.info('Lambda Handler - End')
                 return
             
-            tags = parse_tags(coverage_tags)
-            include_scope = deployment['scope']['include']
-            for k in event['detail']['changed-tag-keys']:
-                key = str.lower(k)
-                if key in tags:
-                    if k not in event['detail']['tags']:
-                        # remove this vpc from scope
-                        include_scope = update_scope(
-                                include_scope,
-                                region,
-                                'vpc',
-                                event['resources'],
-                                add=False
-                            )
-                    elif event['detail']['tags'][k] == tags[key]:
-                        # add this vpc to scope
-                        include_scope = update_scope(
-                                include_scope,
-                                region,
-                                'vpc',
-                                event['resources'],
-                                policy_id=policy_id,
-                                add=True
-                            )
-                        
+            LOGGER.info(f"Current Include Scope: {deployment['scope']['include']}")
+            for tag in coverage_tags:
+                tag_key, tag_value = tag.split(':')
+                if tag_key in event['detail']['changed-tag-keys']:
+                    add_to_scope = event['detail']['tags'].get(tag_key) == tag_value
+                    include_scope = update_scope(
+                            deployment['scope']['include'],
+                            region,
+                            'vpc',
+                            event['resources'],
+                            policy_id=policy_id,
+                            add=add_to_scope
+                        )
+            LOGGER.info(f"New Include Scope: {include_scope}")
+
             deployment['scope']['include'] = include_scope
             result = deployments_client.update_deployment(
                 account_id=auth['ALCID'],
@@ -201,7 +183,6 @@ def lambda_handler(event, context):
                 version = deployment['version']
                 )            
             LOGGER.info(f"Updated protection scope: {result.json()}")
-                        
         else:
             LOGGER.info('Invalid event type - skipping')
     else:
