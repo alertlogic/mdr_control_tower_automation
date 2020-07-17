@@ -6,7 +6,7 @@ name = "pypi"
 
 
 [packages]
-alertlogic-sdk-python = "==1.0.31"
+alertlogic-sdk-python = "==1.0.34"
 
 [dev-packages]
 
