@@ -436,6 +436,65 @@ def security_account_setup_handler(target_session, account, region, event):
     return registration_sns, secret
 
 
+def guardduty_setup_handler(target_session, org_id, master_account, master_region, accounts, regions, event):
+    '''
+    Configure Alert Logic's GuardDuty integration by deploying GuardDuty Collector stackset instances
+    :param target_session: boto3 session object
+    :param master_account: Control Tower master account id
+    :param master_region: Master region
+    :param accounts: List of accounts to deploy the GuardDuty integration
+    :param regions: List of regions to deploy the GuardDuty integration
+    :event CFT Custom Resource event
+    :return:
+    '''
+    secret_name = event['ResourceProperties']['Secret']
+    al_credentials = get_secret(target_session, master_region, secret_name)
+    if not al_credentials:
+        raise ValueError(f"Invalid Secret: {secret_name}")
+
+    if event['ResourceProperties']['EnableGuardDutyIntegration'].lower() != 'true':
+        LOGGER.info("Enable GuardDuty Integration is not requested.")
+        return
+
+    stackset_name = event['ResourceProperties']['AlertLogicGuardDutyCollectorStackSetName']
+    org_id = event['ResourceProperties']['OrgId']
+    stackset_name = event['ResourceProperties']['AlertLogicGuardDutyCollectorStackSetName']
+    stackset_url = event['ResourceProperties']['AlertLogicGuardDutyCollectorTemplateUrl']
+    auth = json.loads(al_credentials)
+    stackset_param_list = [
+            {
+                "ParameterKey": "AccessKeyId",
+                "ParameterValue": auth['ALAccessKey']
+            },
+            {
+                "ParameterKey": "SecretKey",
+                "ParameterValue": auth['ALSecretKey']
+            }
+        ]
+
+    stackset_result = create_stack_set(
+            target_session=target_session,
+            region=master_region,
+            stackset_name=stackset_name,
+            stackset_url=stackset_url,
+            parameter_list=stackset_param_list,
+            admin_role='arn:aws:iam::' + master_account + ':role/service-role/AWSControlTowerStackSetRole',
+            exec_role='AWSControlTowerExecution',
+            capabilities_list=['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND']
+        )
+    if not stackset_result:
+        raise Exception(f"Failed to create {stackset_name} StackSet: {stackset_result}")
+
+    create_stack_instance(
+            target_session=target_session,
+            stackset_name=stackset_name,
+            org_id=org_id,
+            accounts=accounts,
+            regions=regions,
+            allow_failures=True
+        )
+
+
 def lambda_handler(event, context):
     try:
         LOGGER.info('Lambda Handler - Start')
@@ -577,6 +636,7 @@ def lambda_handler(event, context):
                             ],
                         wait_for_completion=True
                     )
+
                 accounts.remove(log_archive_account)
                 # Create accounts for specified OUs, if any
                 protected_accounts = get_protected_accounts(
@@ -594,8 +654,18 @@ def lambda_handler(event, context):
                         regions=regions,
                         allow_failures=True
                     )
-
             LOGGER.info("StackSet status : {}".format(stackset_result))
+
+            # Deploy GuardDuty Integration
+            guardduty_setup_handler(
+                    target_session=session,
+                    org_id=org_id,
+                    master_account=account,
+                    master_region=region,
+                    accounts=protected_accounts + list(core_accounts),
+                    regions=regions,
+                    event=event
+                    )
 
         response_data = {}
         response_data["event"] = event

@@ -98,6 +98,21 @@ Parameters:
     AllowedValues:
       - Automatic
       - Manual
+  EnableGuardDutyIntegration:
+    Type: String
+    Description: Enable AlertLogic full GuardDuty integration (yes / no)
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  AlertLogicGuardDutyCollectorStackSetName:
+    Type: String
+    Description: Name of the Alert Logic GuardDuty Collector integration StackSet that will be deployed in all target regions
+    Default: 'AlertLogic-CT-GuardDuty-Collector-Setup'
+  AlertLogicGuardDutyCollectorTemplateUrl:
+    Type: String
+    Description: S3 URL of the Alert Logic GuardDuty Collector CloudFormation template
+    Default: https://s3.amazonaws.com/alertlogic-collectors-us-east-1/cfn/guardduty.template
   AlertLogicApiEndpoint:
     Type: String
     Description: AlertLogic API Endpoint to use
@@ -123,6 +138,7 @@ Metadata:
           - TargetRegion
           - FullRegionCoverage
           - CoverageTags
+          - EnableGuardDutyIntegration
       - 
         Label:
           default: "AWS Control Tower Information"
@@ -139,6 +155,8 @@ Metadata:
           - CentralizedRoleStackSetName
           - SecurityAccountSetupStackSetName
           - SecurityAccountSetupStackSetTemplateUrl
+          - AlertLogicGuardDutyCollectorStackSetName
+          - AlertLogicGuardDutyCollectorTemplateUrl
           - SourceBucket
     ParameterLabels: 
       AlertLogicCustomerId:
@@ -161,6 +179,8 @@ Metadata:
         default: "Protect All VPCs in each region?"
       CoverageTags:
         default: "VPC Tags to protect"
+      EnableGuardDutyIntegration:
+        default: "Enable Alert Logic's GuardDuty integration"
       OrgId:
         default: "Organization ID"
       LogArchiveAccount:
@@ -262,6 +282,7 @@ Resources:
               - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${StackSetName}:*'
               - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${CentralizedRoleStackSetName}:*'
               - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${SecurityAccountSetupStackSetName}:*'
+              - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${AlertLogicGuardDutyCollectorStackSetName}:*'
           - Effect: Allow
             Action:
               - s3:GetObject
@@ -269,6 +290,7 @@ Resources:
               - !Sub 'arn:aws:s3:::alertlogic-public-repo.*/templates/ct-al*'
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-733251395267/*'
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-948063967832/*'
+              - !Sub 'arn:aws:s3:::alertlogic-collectors-us-east-1/cfn/*'
           - Effect: Allow
             Action:
               - organizations:ListAccounts
@@ -394,4 +416,7 @@ Resources:
       FullRegionCoverage: !Ref FullRegionCoverage
       CoverageTags: !Ref CoverageTags
       AlertLogicApiEndpoint: !Ref AlertLogicApiEndpoint
+      EnableGuardDutyIntegration: !Ref EnableGuardDutyIntegration
+      AlertLogicGuardDutyCollectorStackSetName: !Ref AlertLogicGuardDutyCollectorStackSetName
+      AlertLogicGuardDutyCollectorTemplateUrl: !Ref AlertLogicGuardDutyCollectorTemplateUrl
 
