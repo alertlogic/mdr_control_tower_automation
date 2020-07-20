@@ -273,6 +273,7 @@ def get_protected_accounts(included_ou_list, excluded_ou_list, master_account, c
         kwargs = {}
         orgs_client = session.client('organizations')
         if 'ALL' in included_ou_list:
+            # Get all accounts
             while True:
                 response = orgs_client.list_accounts(**kwargs)
                 accounts.update([
@@ -282,6 +283,19 @@ def get_protected_accounts(included_ou_list, excluded_ou_list, master_account, c
                 if 'NextToken' not in response:
                     break
                 kwargs['NextToken'] = response['NextToken']
+
+            # Get all excluded accounts
+            for parent_id in excluded_ou_list:
+                kwargs['ParentId'] = parent_id
+                while True:
+                    response = orgs_client.list_accounts_for_parent(**kwargs)
+                    for account in response['Accounts']:
+                        if account['Id'] != master_account:
+                            account.remove(account['Id'])
+
+                    if 'NextToken' not in response:
+                        break
+                    kwargs['NextToken'] = response['NextToken']
         else:
             for parent_id in included_ou_list:
                 kwargs['ParentId'] = parent_id
