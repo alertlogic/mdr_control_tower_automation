@@ -290,6 +290,7 @@ Resources:
               - !Sub 'arn:aws:s3:::alertlogic-public-repo.*/templates/ct-al*'
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-733251395267/*'
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-948063967832/*'
+              - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-857795874556/*'
               - !Sub 'arn:aws:s3:::alertlogic-collectors-us-east-1/cfn/*'
           - Effect: Allow
             Action:
