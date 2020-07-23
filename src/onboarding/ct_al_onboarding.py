@@ -247,6 +247,7 @@ def get_ci_role_cft_url(target_session, role_type, region, event):
     LOGGER.info(f"Initializing client for {auth['ALAccessKey']} using {global_endpoint} endpoint")
     themis_client = almdrlib.client(
             'themis',
+            account_id=auth['ALCID'],
             access_key_id=auth['ALAccessKey'],
             secret_key=auth['ALSecretKey'],
             global_endpoint=global_endpoint

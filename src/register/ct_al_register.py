@@ -163,6 +163,7 @@ def handle_update_notification(session, context, sns_event):
         # Create Alert Logic Deployment Credentials
         auth = json.loads(al_credentials)
         al_session = almdrlib.Session(
+                account_id=auth['ALCID'],
                 access_key_id=auth['ALAccessKey'],
                 secret_key=auth['ALSecretKey'],
                 global_endpoint=global_endpoint
@@ -223,6 +224,7 @@ def handle_create_notification(
         # Create Alert Logic Deployment Credentials
         auth = json.loads(al_credentials)
         al_session = almdrlib.Session(
+                account_id=auth['ALCID'],
                 access_key_id=auth['ALAccessKey'],
                 secret_key=auth['ALSecretKey'],
                 global_endpoint=global_endpoint
