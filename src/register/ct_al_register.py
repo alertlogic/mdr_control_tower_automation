@@ -15,11 +15,13 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
-import boto3, json, time, sys, os, base64
+import boto3
+import json
+import os
+import base64
 import logging
 import requests
 import almdrlib
-from botocore.exceptions import ClientError
 
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
@@ -122,10 +124,19 @@ def get_policy_id(client, al_account_id):
                 LOGGER.info(f"Policy ID for {al_account_id} is {policy['id']}")
                 return policy['id']
 
-        LOGGER.Error(f"Cannot find 'Professional' policy id")
+        LOGGER.error(f"Cannot find 'Professional' policy id")
         return None
     except Exception as e:
         LOGGER.exception(f"Failed to list policies. Error: {str(e)}")
+        return None
+
+
+def get_location_id(client, al_account_id):
+    try:
+        account_details = client.get_account_details(account_id=al_account_id).json()
+        return account_details['default_location']
+    except Exception as e:
+        LOGGER.exception(f"Failed to get {al_account_id} account details. Error: {str(e)}")
         return None
 
 
@@ -270,6 +281,11 @@ def handle_create_notification(
                     auth['ALCID']
                 )
 
+            location_id = get_location_id(
+                    al_session.client('aims'),
+                    auth['ALCID']
+                )
+
             response = deployments_client.create_deployment(
                     account_id=account_id,
                     credentials=[
@@ -284,6 +300,10 @@ def handle_create_notification(
                     platform={
                         'type': 'aws',
                         'id': aws_account_id
+                    },
+                    cloud_defender={
+                        'location_id': location_id,
+                        'enabled': False
                     },
                     scope={
                         'include': get_scope(
