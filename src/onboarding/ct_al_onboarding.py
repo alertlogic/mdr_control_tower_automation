@@ -286,6 +286,7 @@ def get_protected_accounts(included_ou_list, excluded_ou_list, master_account, c
                 kwargs['NextToken'] = response['NextToken']
 
             # Get all excluded accounts
+            excluded_ou_list = list(filter(None, excluded_ou_list))
             for parent_id in excluded_ou_list:
                 kwargs['ParentId'] = parent_id
                 while True:
@@ -298,6 +299,7 @@ def get_protected_accounts(included_ou_list, excluded_ou_list, master_account, c
                         break
                     kwargs['NextToken'] = response['NextToken']
         else:
+            included_ou_list = list(filter(None, included_ou_list))
             for parent_id in included_ou_list:
                 kwargs['ParentId'] = parent_id
                 while True:
