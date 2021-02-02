@@ -71,6 +71,7 @@ stackset_params_map = {
         'CoverageTags',
         'AlertLogicDeploymentMode',
         'SourceBucket',
+        'SourcePrefix',
         'AlertLogicApiEndpoint'
         ],
     SECURITY_SETUP_TYPE: [
@@ -78,6 +79,7 @@ stackset_params_map = {
         'AlertLogicCustomerId',
         'TargetRegion',
         'SourceBucket',
+        'SourcePrefix',
         'FullRegionCoverage',
         'AlertLogicApiEndpoint'
         ]
@@ -621,13 +623,22 @@ def lambda_handler(event, context):
                 # SNS Topic is present for other stack instances
                 # to publish registration request
                 core_accounts = set([security_account, log_archive_account, audit_account])
-                accounts = list(core_accounts.difference({audit_account}))
+                accounts = []
                 regions = get_regions(
                         region,
                         str(event['ResourceProperties']['TargetRegion']).split(",")
                     )
 
-                # Deploy stackset to core accounts
+                # Deploy stackset to security accounts
+                create_stack_instance(
+                        target_session=session,
+                        stackset_name=stackset_name,
+                        org_id=org_id,
+                        accounts=[security_account],
+                        regions=regions,
+                        wait_for_completion=True
+                    )
+                # Deploy stackset to audit accounts
                 create_stack_instance(
                         target_session=session,
                         stackset_name=stackset_name,
@@ -636,9 +647,7 @@ def lambda_handler(event, context):
                         regions=regions,
                         wait_for_completion=True
                     )
-
                 # Deploy stackset to Log Archive account
-                # Create stack instances for the rest of the accounts
                 create_stack_instance(
                         target_session=session,
                         stackset_name=stackset_name,
@@ -653,8 +662,7 @@ def lambda_handler(event, context):
                             ],
                         wait_for_completion=True
                     )
-
-                accounts.remove(log_archive_account)
+                
                 # Create accounts for specified OUs, if any
                 protected_accounts = get_protected_accounts(
                     included_ou_list=event['ResourceProperties']['IncludeOrganizationalUnits'],
