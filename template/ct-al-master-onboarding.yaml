@@ -13,8 +13,12 @@ Parameters:
     MinLength: 3
     MaxLength: 63
     AllowedPattern: '[a-zA-Z0-9-.]*'
-    Description: The prefix of the S3 bucket which contains Lambda package. Note that the name of the bucket must contain a region name suffix. The following is the valid backet name syntax = <bucket_name_prefix>.us-east-1
-    Default: alertlogic-public-repo
+    Description: Source bucket for Alert Logic Control Tower integration lambda function zip files
+    Default: wellsiau-quickstart
+  SourcePrefix:
+    Type: String
+    Description: Key Prefix on the source bucket for Alert Logic Control Tower integration lambda function zip files
+    Default: alertlogic/
   AuditAccount:
     Type: String
     Description: Control Tower AWS audit account
@@ -52,7 +56,7 @@ Parameters:
   StackSetTemplateUrl:
     Type: String
     Description: S3 URL of the stackset template (ct-al-master-stackset.yaml)
-    Default: https://s3.amazonaws.com/alertlogic-public-repo.us-east-1/templates/ct-al-master-stackset.yaml
+    Default: https://wellsiau-quickstart.s3.amazonaws.com/alertlogic/templates/ct-al-master-stackset.yaml
   CentralizedRoleStackSetName:
     Type: String
     Description: Name of the Cloud Trail Logs Collection IAM Role StackSet. This StackSet will be deployed in Control Tower Master account
@@ -64,7 +68,11 @@ Parameters:
   SecurityAccountSetupStackSetTemplateUrl:
     Type: String
     Description: S3 URL of the stackset template (ct-al-master-stackset.yaml)
-    Default: https://s3.amazonaws.com/alertlogic-public-repo.us-east-1/templates/ct-al-security-setup-stackset.yaml
+    Default: https://wellsiau-quickstart.s3.amazonaws.com/alertlogic/templates/ct-al-security-setup-stackset.yaml
+  HelperTemplateUrl:
+    Type: String
+    Description: S3 URL of the helper template (ct-al-helper.yaml)
+    Default: https://wellsiau-quickstart.s3.amazonaws.com/alertlogic/templates/ct-al-helper.yaml
   TargetRegion:
     Type: String
     Description: Target regions for AlertLogic deployment
@@ -157,7 +165,9 @@ Metadata:
           - SecurityAccountSetupStackSetTemplateUrl
           - AlertLogicGuardDutyCollectorStackSetName
           - AlertLogicGuardDutyCollectorTemplateUrl
+          - HelperTemplateUrl
           - SourceBucket
+          - SourcePrefix
     ParameterLabels: 
       AlertLogicCustomerId:
         default: "Alert Logic Customer ID"
@@ -193,8 +203,37 @@ Mappings:
     Key:
       LifeCycle: "lambda_packages/lifecycle_1.0.1.zip"
       Onboarding: "lambda_packages/onboarding_1.0.1.zip"
+      Register: "lambda_packages/register_1.0.1.zip"
+      Deployer: "lambda_packages/deployer_1.0.1.zip"
+      ScopeDiscovery: "lambda_packages/scope_discovery_1.0.1.zip"
 
 Resources:
+
+  ALHelper:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref HelperTemplateUrl
+      Parameters:
+        QSS3BucketName: !Ref SourceBucket
+        QSS3KeyPrefix: !Ref SourcePrefix
+        OrgId: !Ref OrgId
+      TimeoutInMinutes: '60'
+
+  ALHelperCopyZip:
+    DependsOn: ALHelper
+    Type: Custom::CopyZips
+    Properties:
+      ServiceToken: !GetAtt ALHelper.Outputs.ALHelperCopyZip
+      DestBucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+      SourceBucket: !GetAtt ALHelper.Outputs.ALHelperQSBucket
+      Prefix: !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix
+      Objects:
+        - !FindInMap ["SourceCode", "Key", "LifeCycle"]
+        - !FindInMap ["SourceCode", "Key", "Onboarding"]
+        - !FindInMap ["SourceCode", "Key", "Register"]
+        - !FindInMap ["SourceCode", "Key", "Deployer"]
+        - !FindInMap ["SourceCode", "Key", "ScopeDiscovery"]
+
   ALCredentials:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -213,14 +252,15 @@ Resources:
   
   ALOnboarding:
     Type: "AWS::Lambda::Function"
+    DependsOn: ALHelperCopyZip
     Properties:
       FunctionName: !Join ['-', ['AlertLogic-CT-Onboarding', !Ref AlertLogicApiEndpoint]]
       Description: CT AL - Function to handle AlertLogic infrastructure onboarding
       Handler: "ct_al_onboarding.lambda_handler"
       Role: !GetAtt ALOnboardingRole.Arn
       Code:
-        S3Bucket: !Join [".", [!Ref SourceBucket, !Ref "AWS::Region"]]
-        S3Key: !Join ["/", [!FindInMap ["SourceCode", "Key", "Onboarding"]]]
+        S3Bucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+        S3Key: !Join ["", [!GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix, !FindInMap ["SourceCode", "Key", "Onboarding"]]]
       Runtime: "python3.7"
       MemorySize: 128
       Timeout: 900
@@ -292,6 +332,7 @@ Resources:
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-948063967832/*'
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-857795874556/*'
               - !Sub 'arn:aws:s3:::alertlogic-collectors-us-east-1/cfn/*'
+              - !Join ['',['arn:aws:s3:::', !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket, '/', !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix, '*']]
           - Effect: Allow
             Action:
               - organizations:ListAccounts
@@ -339,14 +380,15 @@ Resources:
 
   ALLifeCycle:
     Type: "AWS::Lambda::Function"
+    DependsOn: ALHelperCopyZip
     Properties:
       FunctionName: !Join ['-', ['AlertLogic-CT-LifeCycle', !Ref AlertLogicApiEndpoint]]
       Description: CT AL - Function to handle Control Tower LifeCycle
       Handler: "ct_al_lifecycle.lambda_handler"
       Role: !GetAtt ALLifeCycleRole.Arn
       Code:
-        S3Bucket: !Join [".", [!Ref SourceBucket, !Ref "AWS::Region"]]
-        S3Key: !Join ["/", [!FindInMap ["SourceCode", "Key", "LifeCycle"]]]
+        S3Bucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+        S3Key: !Join ["", [!GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix, !FindInMap ["SourceCode", "Key", "LifeCycle"]]]
       Runtime: "python3.7"
       MemorySize: 128
       Timeout: 300
@@ -403,7 +445,8 @@ Resources:
       AlertLogicCustomerId: !Ref AlertLogicCustomerId
       MasterAccount: !Ref AWS::AccountId
       MasterRegion: !Ref AWS::Region
-      SourceBucket: !Ref SourceBucket
+      SourceBucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+      SourcePrefix: !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix
       AuditAccount: !Ref AuditAccount
       StackSetUrl: !Ref StackSetTemplateUrl
       TargetRegion: !Ref TargetRegion
@@ -420,4 +463,3 @@ Resources:
       EnableGuardDutyIntegration: !Ref EnableGuardDutyIntegration
       AlertLogicGuardDutyCollectorStackSetName: !Ref AlertLogicGuardDutyCollectorStackSetName
       AlertLogicGuardDutyCollectorTemplateUrl: !Ref AlertLogicGuardDutyCollectorTemplateUrl
-
