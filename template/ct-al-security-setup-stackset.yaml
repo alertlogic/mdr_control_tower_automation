@@ -35,11 +35,12 @@ Parameters:
     MinLength: 3
     MaxLength: 63
     AllowedPattern: '[a-zA-Z0-9-.]*'
-    Description: >-
-        The prefix of the S3 bucket which contains Lambda package.
-        Note that the name of the bucket must contain a region name suffix.
-        The following is the valid backet name syntax = <bucket_name_prefix>.us-east-1
-    Default: alertlogic-public-repo
+    Description: Source bucket for Alert Logic Control Tower integration lambda function zip files
+    Default: wellsiau-quickstart
+  SourcePrefix:
+    Type: String
+    Description: Key Prefix on the source bucket for Alert Logic Control Tower integration lambda function zip files
+    Default: alertlogic/
   AlertLogicApiEndpoint:
     Type: String
     Description: AlertLogic API Endpoint to use
@@ -116,8 +117,8 @@ Resources:
       Handler: "ct_al_register.lambda_handler"
       Role: !GetAtt ALRegisterRole.Arn
       Code:
-        S3Bucket: !Join [".", [!Ref SourceBucket, !Ref "AWS::Region"]]
-        S3Key: !Join ["/", [!FindInMap ["SourceCode", "Key", "Register"]]]
+        S3Bucket: !Ref SourceBucket
+        S3Key: !Join ["", [!Ref SourcePrefix, !FindInMap ["SourceCode", "Key", "Register"]]]
       Runtime: "python3.7"
       MemorySize: 128
       Timeout: 300
