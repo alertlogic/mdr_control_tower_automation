@@ -15,7 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
-import boto3, json, time, base64, os
+import boto3, json, time, base64, os, botocore
 import logging
 import almdrlib
 import requests
@@ -165,7 +165,7 @@ def create_stack_set(target_session, region, stackset_name, stackset_url, parame
             Capabilities=capabilities_list
         )
         return result
-    except Exception as e:
+    except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == "NameAlreadyExistsException":
             LOGGER.info("StackSet {} already exists".format(stackset_name))
             return True
@@ -423,6 +423,7 @@ def security_account_setup_handler(target_session, account, region, event):
             "ParameterValue": auth['ALSecretKey']
         }
     ])
+    
     stackset_result = create_stack_set(
         target_session=target_session,
         region=region,

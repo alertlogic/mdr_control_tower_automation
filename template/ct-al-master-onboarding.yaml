@@ -338,6 +338,7 @@ Resources:
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-857795874556/*'
               - !Sub 'arn:aws:s3:::alertlogic-collectors-us-east-1/cfn/*'
               - !Join ['',['arn:aws:s3:::', !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket, '/', !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix, '*']]
+              - !Join ['',['arn:aws:s3:::', !Ref QSS3BucketName, '/', !Ref QSS3KeyPrefix, '*']]
           - Effect: Allow
             Action:
               - organizations:ListAccounts
