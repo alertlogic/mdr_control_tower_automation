@@ -3,7 +3,7 @@ Description: CT AlertLogic Automation
 Parameters:
   OrgId:
     Type: String
-    Description: The Amazon Organization ID
+    Description: Your AWS Organizations unique identifier. Please note that this CloudFormation stack must be deployed at your AWS management account.
     MinLength: 12
     MaxLength: 12
     AllowedPattern: '^[o][\-][a-z0-9]{10}$'
@@ -21,19 +21,19 @@ Parameters:
     Default: alertlogic/
   AuditAccount:
     Type: String
-    Description: Control Tower AWS audit account
+    Description: AWS Control Tower audit account id
     AllowedPattern: '^[0-9]{12}$'
     MinLength: 12
     MaxLength: 12
   LogArchiveAccount:
     Type: String
-    Description: Control Tower AWS log archive account
+    Description: AWS Control Tower log archive account id
     AllowedPattern: '^[0-9]{12}$'
     MinLength: 12
     MaxLength: 12
   SecurityAccount:
     Type: String
-    Description: Designated AWS security account
+    Description: Designated AWS security account id, this account must be part of your AWS Control Tower managed accounts.
     AllowedPattern: '^[0-9]{12}$'
     MinLength: 12
     MaxLength: 12
@@ -45,13 +45,13 @@ Parameters:
         Note that existing OU member accounts will be setup for protection during CFT deployment.
   ExcludeOrganizationalUnits:
     Type: CommaDelimitedList
-    Description: Organizational Unitsto Exclude from protection. Note that AWS Accounts added to spefied OU will not be protected.
+    Description: Organizational Units to Exclude from protection. Note that AWS Accounts added to spefied OU will not be protected.
   AlertLogicCustomerId:
     Type: String
-    Description: AlertLogic Customer Id
+    Description: AlertLogic Customer Id, you can find this from Alert Logic portal.
   StackSetName:
     Type: String
-    Description: Name of the StackSet that will be deployed in Control Tower Master account
+    Description: Name of the primary StackSet that will be deployed in Control Tower Master account.
     Default: 'AlertLogic-CT'
   StackSetTemplateUrl:
     Type: String
@@ -75,11 +75,11 @@ Parameters:
     Default: https://wellsiau-quickstart.s3.amazonaws.com/alertlogic/templates/ct-al-helper.yaml
   TargetRegion:
     Type: String
-    Description: Target regions for AlertLogic deployment
+    Description: Target AWS regions for AlertLogic deployment
     Default: us-east-1
   FullRegionCoverage:
     Type: String 
-    Description: AlertLogic full region deployment scope (yes / no)
+    Description: AlertLogic full region deployment scope
     Default: true
     AllowedValues:
       - true
@@ -108,7 +108,7 @@ Parameters:
       - Manual
   EnableGuardDutyIntegration:
     Type: String
-    Description: Enable AlertLogic full GuardDuty integration (yes / no)
+    Description: Enable AlertLogic full GuardDuty integration
     Default: true
     AllowedValues:
       - true
