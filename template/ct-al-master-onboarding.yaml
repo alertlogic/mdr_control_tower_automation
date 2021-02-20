@@ -147,6 +147,7 @@ Metadata:
           - FullRegionCoverage
           - CoverageTags
           - EnableGuardDutyIntegration
+          - AlertLogicApiEndpoint
       - 
         Label:
           default: "AWS Control Tower Information"
@@ -156,7 +157,7 @@ Metadata:
           - AuditAccount
       -
         Label:
-          default: "Cloud Formation and StackSets Information."
+          default: "Cloud Formation Stack and StackSets Information"
         Parameters:
           - StackSetName
           - StackSetTemplateUrl
