@@ -8,16 +8,16 @@ Parameters:
     MaxLength: 12
     AllowedPattern: '^[o][\-][a-z0-9]{10}$'
     ConstraintDescription: The Org Id must be a 12 character string starting with o- and followed by 10 lower case alphanumeric characters
-  SourceBucket:
+  QSS3BucketName:
     Type: String
     MinLength: 3
     MaxLength: 63
     AllowedPattern: '[a-zA-Z0-9-.]*'
-    Description: Source bucket for Alert Logic Control Tower integration lambda function zip files
+    Description: Quick Start S3 bucket name
     Default: wellsiau-quickstart
-  SourcePrefix:
+  QSS3KeyPrefix:
     Type: String
-    Description: Key Prefix on the source bucket for Alert Logic Control Tower integration lambda function zip files
+    Description: Quick Start S3 key prefix
     Default: alertlogic/
   AuditAccount:
     Type: String
@@ -166,8 +166,12 @@ Metadata:
           - AlertLogicGuardDutyCollectorStackSetName
           - AlertLogicGuardDutyCollectorTemplateUrl
           - HelperTemplateUrl
-          - SourceBucket
-          - SourcePrefix
+      -
+        Label:
+          default: "AWS Quick Start Configuration"
+        Parameters:
+          - QSS3BucketName
+          - QSS3KeyPrefix
     ParameterLabels: 
       AlertLogicCustomerId:
         default: "Alert Logic Customer ID"
@@ -214,8 +218,8 @@ Resources:
     Properties:
       TemplateURL: !Ref HelperTemplateUrl
       Parameters:
-        QSS3BucketName: !Ref SourceBucket
-        QSS3KeyPrefix: !Ref SourcePrefix
+        QSS3BucketName: !Ref QSS3BucketName
+        QSS3KeyPrefix: !Ref QSS3KeyPrefix
         OrgId: !Ref OrgId
       TimeoutInMinutes: '60'
 
@@ -445,8 +449,8 @@ Resources:
       AlertLogicCustomerId: !Ref AlertLogicCustomerId
       MasterAccount: !Ref AWS::AccountId
       MasterRegion: !Ref AWS::Region
-      SourceBucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
-      SourcePrefix: !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix
+      QSS3BucketName: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+      QSS3KeyPrefix: !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix
       AuditAccount: !Ref AuditAccount
       StackSetUrl: !Ref StackSetTemplateUrl
       TargetRegion: !Ref TargetRegion
