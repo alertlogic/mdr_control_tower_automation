@@ -70,16 +70,16 @@ stackset_params_map = {
         'FullRegionCoverage',
         'CoverageTags',
         'AlertLogicDeploymentMode',
-        'SourceBucket',
-        'SourcePrefix',
+        'QSS3BucketName',
+        'QSS3KeyPrefix',
         'AlertLogicApiEndpoint'
         ],
     SECURITY_SETUP_TYPE: [
         'OrgId',
         'AlertLogicCustomerId',
         'TargetRegion',
-        'SourceBucket',
-        'SourcePrefix',
+        'QSS3BucketName',
+        'QSS3KeyPrefix',
         'FullRegionCoverage',
         'AlertLogicApiEndpoint'
         ]
