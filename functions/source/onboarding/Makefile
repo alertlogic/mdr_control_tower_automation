@@ -2,7 +2,7 @@
 BASE := $(shell /bin/pwd)
 CODE_COVERAGE = 72
 PIPENV ?= pipenv
-DIST_DIR ?= $(BASE)/dist
+DIST_DIR ?= $(BASE)/functions/packages
 $(shell mkdir -p $(DIST_DIR))
 
 ################# 
@@ -36,7 +36,7 @@ clean: ##=> Deletes current build environment and latest build
 	$(info [*] Who needs all that anyway? Destroying environment....)
 	@rm -rf ./build
 	@rm -rf ./__pycache__
-	@rm -rf $(DIST_DIR)/$(FUNCTION)_$(VERSION).zip
+	#@rm -rf $(DIST_DIR)/$(FUNCTION)_$(VERSION).zip
 
 all: clean build
 
