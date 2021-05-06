@@ -15,7 +15,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
-import boto3, json, time, base64, os
+import boto3, json, time, base64, os, botocore
 import logging
 import almdrlib
 import requests
@@ -70,14 +70,16 @@ stackset_params_map = {
         'FullRegionCoverage',
         'CoverageTags',
         'AlertLogicDeploymentMode',
-        'SourceBucket',
+        'QSS3BucketName',
+        'QSS3KeyPrefix',
         'AlertLogicApiEndpoint'
         ],
     SECURITY_SETUP_TYPE: [
         'OrgId',
         'AlertLogicCustomerId',
         'TargetRegion',
-        'SourceBucket',
+        'QSS3BucketName',
+        'QSS3KeyPrefix',
         'FullRegionCoverage',
         'AlertLogicApiEndpoint'
         ]
@@ -163,7 +165,7 @@ def create_stack_set(target_session, region, stackset_name, stackset_url, parame
             Capabilities=capabilities_list
         )
         return result
-    except Exception as e:
+    except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == "NameAlreadyExistsException":
             LOGGER.info("StackSet {} already exists".format(stackset_name))
             return True
@@ -421,6 +423,7 @@ def security_account_setup_handler(target_session, account, region, event):
             "ParameterValue": auth['ALSecretKey']
         }
     ])
+    
     stackset_result = create_stack_set(
         target_session=target_session,
         region=region,
@@ -621,13 +624,22 @@ def lambda_handler(event, context):
                 # SNS Topic is present for other stack instances
                 # to publish registration request
                 core_accounts = set([security_account, log_archive_account, audit_account])
-                accounts = list(core_accounts.difference({audit_account}))
+                accounts = []
                 regions = get_regions(
                         region,
                         str(event['ResourceProperties']['TargetRegion']).split(",")
                     )
 
-                # Deploy stackset to core accounts
+                # Deploy stackset to security accounts
+                create_stack_instance(
+                        target_session=session,
+                        stackset_name=stackset_name,
+                        org_id=org_id,
+                        accounts=[security_account],
+                        regions=regions,
+                        wait_for_completion=True
+                    )
+                # Deploy stackset to audit accounts
                 create_stack_instance(
                         target_session=session,
                         stackset_name=stackset_name,
@@ -636,9 +648,7 @@ def lambda_handler(event, context):
                         regions=regions,
                         wait_for_completion=True
                     )
-
                 # Deploy stackset to Log Archive account
-                # Create stack instances for the rest of the accounts
                 create_stack_instance(
                         target_session=session,
                         stackset_name=stackset_name,
@@ -653,8 +663,7 @@ def lambda_handler(event, context):
                             ],
                         wait_for_completion=True
                     )
-
-                accounts.remove(log_archive_account)
+                
                 # Create accounts for specified OUs, if any
                 protected_accounts = get_protected_accounts(
                     included_ou_list=event['ResourceProperties']['IncludeOrganizationalUnits'],

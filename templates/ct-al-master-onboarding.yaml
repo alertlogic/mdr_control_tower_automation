@@ -3,33 +3,37 @@ Description: CT AlertLogic Automation
 Parameters:
   OrgId:
     Type: String
-    Description: The Amazon Organization ID
+    Description: Your AWS Organizations unique identifier. Please note that this CloudFormation stack must be deployed at your AWS management account.
     MinLength: 12
     MaxLength: 12
     AllowedPattern: '^[o][\-][a-z0-9]{10}$'
     ConstraintDescription: The Org Id must be a 12 character string starting with o- and followed by 10 lower case alphanumeric characters
-  SourceBucket:
+  QSS3BucketName:
     Type: String
     MinLength: 3
     MaxLength: 63
     AllowedPattern: '[a-zA-Z0-9-.]*'
-    Description: The prefix of the S3 bucket which contains Lambda package. Note that the name of the bucket must contain a region name suffix. The following is the valid backet name syntax = <bucket_name_prefix>.us-east-1
-    Default: alertlogic-public-repo
+    Description: Quick Start S3 bucket name
+    Default: wellsiau-quickstart
+  QSS3KeyPrefix:
+    Type: String
+    Description: Quick Start S3 key prefix
+    Default: alertlogic/
   AuditAccount:
     Type: String
-    Description: Control Tower AWS audit account
+    Description: AWS Control Tower audit account id
     AllowedPattern: '^[0-9]{12}$'
     MinLength: 12
     MaxLength: 12
   LogArchiveAccount:
     Type: String
-    Description: Control Tower AWS log archive account
+    Description: AWS Control Tower log archive account id
     AllowedPattern: '^[0-9]{12}$'
     MinLength: 12
     MaxLength: 12
   SecurityAccount:
     Type: String
-    Description: Designated AWS security account
+    Description: Designated AWS security account id, this account must be part of your AWS Control Tower managed accounts.
     AllowedPattern: '^[0-9]{12}$'
     MinLength: 12
     MaxLength: 12
@@ -41,18 +45,18 @@ Parameters:
         Note that existing OU member accounts will be setup for protection during CFT deployment.
   ExcludeOrganizationalUnits:
     Type: CommaDelimitedList
-    Description: Organizational Unitsto Exclude from protection. Note that AWS Accounts added to spefied OU will not be protected.
+    Description: Organizational Units to Exclude from protection. Note that AWS Accounts added to spefied OU will not be protected.
   AlertLogicCustomerId:
     Type: String
-    Description: AlertLogic Customer Id
+    Description: AlertLogic Customer Id, you can find this from Alert Logic portal.
   StackSetName:
     Type: String
-    Description: Name of the StackSet that will be deployed in Control Tower Master account
+    Description: Name of the primary StackSet that will be deployed in Control Tower Master account.
     Default: 'AlertLogic-CT'
   StackSetTemplateUrl:
     Type: String
     Description: S3 URL of the stackset template (ct-al-master-stackset.yaml)
-    Default: https://s3.amazonaws.com/alertlogic-public-repo.us-east-1/templates/ct-al-master-stackset.yaml
+    Default: https://wellsiau-quickstart.s3.amazonaws.com/alertlogic/templates/ct-al-master-stackset.yaml
   CentralizedRoleStackSetName:
     Type: String
     Description: Name of the Cloud Trail Logs Collection IAM Role StackSet. This StackSet will be deployed in Control Tower Master account
@@ -64,10 +68,14 @@ Parameters:
   SecurityAccountSetupStackSetTemplateUrl:
     Type: String
     Description: S3 URL of the stackset template (ct-al-master-stackset.yaml)
-    Default: https://s3.amazonaws.com/alertlogic-public-repo.us-east-1/templates/ct-al-security-setup-stackset.yaml
+    Default: https://wellsiau-quickstart.s3.amazonaws.com/alertlogic/templates/ct-al-security-setup-stackset.yaml
+  HelperTemplateUrl:
+    Type: String
+    Description: S3 URL of the helper template (ct-al-helper.yaml)
+    Default: https://wellsiau-quickstart.s3.amazonaws.com/alertlogic/templates/ct-al-helper.yaml
   TargetRegion:
     Type: String
-    Description: Target regions for AlertLogic deployment
+    Description: Target AWS regions for AlertLogic deployment
     Default: us-east-1
   FullRegionCoverage:
     Type: String
@@ -100,7 +108,7 @@ Parameters:
       - Manual
   EnableGuardDutyIntegration:
     Type: String
-    Description: Enable AlertLogic full GuardDuty integration (yes / no)
+    Description: Enable AlertLogic full GuardDuty integration
     Default: true
     AllowedValues:
       - true
@@ -139,6 +147,7 @@ Metadata:
           - FullRegionCoverage
           - CoverageTags
           - EnableGuardDutyIntegration
+          - AlertLogicApiEndpoint
       -
         Label:
           default: "AWS Control Tower Information"
@@ -148,7 +157,7 @@ Metadata:
           - AuditAccount
       -
         Label:
-          default: "Cloud Formation and StackSets Information."
+          default: "Cloud Formation Stack and StackSets Information"
         Parameters:
           - StackSetName
           - StackSetTemplateUrl
@@ -157,8 +166,14 @@ Metadata:
           - SecurityAccountSetupStackSetTemplateUrl
           - AlertLogicGuardDutyCollectorStackSetName
           - AlertLogicGuardDutyCollectorTemplateUrl
-          - SourceBucket
-    ParameterLabels:
+          - HelperTemplateUrl
+      -
+        Label:
+          default: "AWS Quick Start Configuration"
+        Parameters:
+          - QSS3BucketName
+          - QSS3KeyPrefix
+    ParameterLabels: 
       AlertLogicCustomerId:
         default: "Alert Logic Customer ID"
       AlertLogicAPIAccessKey:
@@ -193,8 +208,37 @@ Mappings:
     Key:
       LifeCycle: "lambda_packages/lifecycle_1.0.1.zip"
       Onboarding: "lambda_packages/onboarding_1.0.1.zip"
+      Register: "lambda_packages/register_1.0.1.zip"
+      Deployer: "lambda_packages/deployer_1.0.1.zip"
+      ScopeDiscovery: "lambda_packages/scope_discovery_1.0.1.zip"
 
 Resources:
+
+  ALHelper:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Ref HelperTemplateUrl
+      Parameters:
+        QSS3BucketName: !Ref QSS3BucketName
+        QSS3KeyPrefix: !Ref QSS3KeyPrefix
+        OrgId: !Ref OrgId
+      TimeoutInMinutes: '60'
+
+  ALHelperCopyZip:
+    DependsOn: ALHelper
+    Type: Custom::CopyZips
+    Properties:
+      ServiceToken: !GetAtt ALHelper.Outputs.ALHelperCopyZip
+      DestBucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+      SourceBucket: !GetAtt ALHelper.Outputs.ALHelperQSBucket
+      Prefix: !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix
+      Objects:
+        - !FindInMap ["SourceCode", "Key", "LifeCycle"]
+        - !FindInMap ["SourceCode", "Key", "Onboarding"]
+        - !FindInMap ["SourceCode", "Key", "Register"]
+        - !FindInMap ["SourceCode", "Key", "Deployer"]
+        - !FindInMap ["SourceCode", "Key", "ScopeDiscovery"]
+
   ALCredentials:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -213,14 +257,15 @@ Resources:
 
   ALOnboarding:
     Type: "AWS::Lambda::Function"
+    DependsOn: ALHelperCopyZip
     Properties:
       FunctionName: !Join ['-', ['AlertLogic-CT-Onboarding', !Ref AlertLogicApiEndpoint]]
       Description: CT AL - Function to handle AlertLogic infrastructure onboarding
       Handler: "ct_al_onboarding.lambda_handler"
       Role: !GetAtt ALOnboardingRole.Arn
       Code:
-        S3Bucket: !Join [".", [!Ref SourceBucket, !Ref "AWS::Region"]]
-        S3Key: !Join ["/", [!FindInMap ["SourceCode", "Key", "Onboarding"]]]
+        S3Bucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+        S3Key: !Join ["", [!GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix, !FindInMap ["SourceCode", "Key", "Onboarding"]]]
       Runtime: "python3.7"
       MemorySize: 128
       Timeout: 900
@@ -291,6 +336,8 @@ Resources:
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-733251395267/*'
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-948063967832/*'
               - !Sub 'arn:aws:s3:::alertlogic-cloud-formation-templates-857795874556/*'
+              - !Join ['',['arn:aws:s3:::', !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket, '/', !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix, '*']]
+              - !Join ['',['arn:aws:s3:::', !Ref QSS3BucketName, '/', !Ref QSS3KeyPrefix, '*']]
               - !Sub 'arn:aws:s3:::alertlogic-collectors-*/cfn/*'
           - Effect: Allow
             Action:
@@ -339,14 +386,15 @@ Resources:
 
   ALLifeCycle:
     Type: "AWS::Lambda::Function"
+    DependsOn: ALHelperCopyZip
     Properties:
       FunctionName: !Join ['-', ['AlertLogic-CT-LifeCycle', !Ref AlertLogicApiEndpoint]]
       Description: CT AL - Function to handle Control Tower LifeCycle
       Handler: "ct_al_lifecycle.lambda_handler"
       Role: !GetAtt ALLifeCycleRole.Arn
       Code:
-        S3Bucket: !Join [".", [!Ref SourceBucket, !Ref "AWS::Region"]]
-        S3Key: !Join ["/", [!FindInMap ["SourceCode", "Key", "LifeCycle"]]]
+        S3Bucket: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+        S3Key: !Join ["", [!GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix, !FindInMap ["SourceCode", "Key", "LifeCycle"]]]
       Runtime: "python3.7"
       MemorySize: 128
       Timeout: 300
@@ -403,7 +451,8 @@ Resources:
       AlertLogicCustomerId: !Ref AlertLogicCustomerId
       MasterAccount: !Ref AWS::AccountId
       MasterRegion: !Ref AWS::Region
-      SourceBucket: !Ref SourceBucket
+      QSS3BucketName: !GetAtt ALHelper.Outputs.ALHelperLambdaZipsBucket
+      QSS3KeyPrefix: !GetAtt ALHelper.Outputs.ALHelperQSKeyPrefix
       AuditAccount: !Ref AuditAccount
       StackSetUrl: !Ref StackSetTemplateUrl
       TargetRegion: !Ref TargetRegion
@@ -420,4 +469,3 @@ Resources:
       EnableGuardDutyIntegration: !Ref EnableGuardDutyIntegration
       AlertLogicGuardDutyCollectorStackSetName: !Ref AlertLogicGuardDutyCollectorStackSetName
       AlertLogicGuardDutyCollectorTemplateUrl: !Ref AlertLogicGuardDutyCollectorTemplateUrl
-

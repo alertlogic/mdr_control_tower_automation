@@ -66,13 +66,17 @@ Parameters:
   Secret:
     Type: String
     Description: Secrets Manager ARN where Alert Logic credentials are stored in Security Account
-  SourceBucket:
+  QSS3BucketName:
     Type: String
     MinLength: 3
     MaxLength: 63
     AllowedPattern: '[a-zA-Z0-9-.]*'
-    Description: The prefix of the S3 bucket which contains Lambda package. Note that the name of the bucket must contain a region name suffix. The following is the valid backet name syntax = <bucket_name_prefix>.us-east-1
-    Default: alertlogic-public-repo
+    Description: Quick Start S3 bucket name
+    Default: wellsiau-quickstart
+  QSS3KeyPrefix:
+    Type: String
+    Description: Quick Start S3 key prefix
+    Default: alertlogic/
   AlertLogicApiEndpoint:
     Type: String
     Description: AlertLogic API Endpoint to use
@@ -266,8 +270,8 @@ Resources:
       Handler: "ct_al_scope_discovery.lambda_handler"
       Role: !GetAtt ALScopeDiscoveryRole.Arn
       Code:
-        S3Bucket: !Join [".", [!Ref SourceBucket, !Ref "AWS::Region"]]
-        S3Key: !Join ["/", [!FindInMap ["SourceCode", "Key", "ScopeDiscovery"]]]
+        S3Bucket: !Ref QSS3BucketName
+        S3Key: !Join ["", [!Ref QSS3KeyPrefix, !FindInMap ["SourceCode", "Key", "ScopeDiscovery"]]]
       Runtime: "python3.7"
       MemorySize: 128
       Timeout: 300
@@ -322,10 +326,9 @@ Resources:
       Description: CT AL - Function to handle AlertLogic appliance deployment
       Handler: "ct_al_deployer.lambda_handler"
       Role: !GetAtt ALDeployerRole.Arn
-      # Role: !Join ['', ['arn:aws:iam::', !Sub '${AWS::AccountId}', ':role/', !FindInMap [LambdaVariable,Role, Deployer]]]
       Code:
-        S3Bucket: !Join [".", [!Ref SourceBucket, !Ref "AWS::Region"]]
-        S3Key: !Join ["/", [!FindInMap ["SourceCode", "Key", "Deployer"]]]
+        S3Bucket: !Ref QSS3BucketName
+        S3Key: !Join ["", [!Ref QSS3KeyPrefix, !FindInMap ["SourceCode", "Key", "Deployer"]]]
       Runtime: "python3.7"
       MemorySize: 128
       Timeout: 300
