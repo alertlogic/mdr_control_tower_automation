@@ -199,7 +199,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: AlertLogic API Credentials
-      Name: !Join ['', ['ALCredentialsSecret', !Ref AlertLogicApiEndpoint]]
+      Name: !Join ['', ['ALCredentialsSecret', !Ref AlertLogicApiEndpoint, !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       SecretString:
         Fn::Join:
         - ''
@@ -214,7 +214,7 @@ Resources:
   ALOnboarding:
     Type: "AWS::Lambda::Function"
     Properties:
-      FunctionName: !Join ['-', ['AlertLogic-CT-Onboarding', !Ref AlertLogicApiEndpoint]]
+      FunctionName: !Join ['-', ['AlertLogic-CT-Onboarding', !Ref AlertLogicApiEndpoint, !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Description: CT AL - Function to handle AlertLogic infrastructure onboarding
       Handler: "ct_al_onboarding.lambda_handler"
       Role: !GetAtt ALOnboardingRole.Arn
@@ -231,7 +231,7 @@ Resources:
   ALOnboardingRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ['-', ['AlertLogic-Onboarding-Role', !Ref AlertLogicApiEndpoint]]
+      RoleName: !Join ['-', ['AlertLogic-Onboarding-Role', !Ref AlertLogicApiEndpoint, !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Description: CT AL - Role used by lambda to prep AWS infrastructure for AlertLogic onboarding
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -305,7 +305,7 @@ Resources:
   ALLifeCycleRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ['-', ['AlertLogic-LifeCycle-Role', !Ref AlertLogicApiEndpoint]]
+      RoleName: !Join ['-', ['AlertLogic-LifeCycle-Role', !Ref AlertLogicApiEndpoint, !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Description: CT AL - Role used by lambda for life cycle / new account creation
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -340,7 +340,7 @@ Resources:
   ALLifeCycle:
     Type: "AWS::Lambda::Function"
     Properties:
-      FunctionName: !Join ['-', ['AlertLogic-CT-LifeCycle', !Ref AlertLogicApiEndpoint]]
+      FunctionName: !Join ['-', ['AlertLogic-CT-LifeCycle', !Ref AlertLogicApiEndpoint, !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
       Description: CT AL - Function to handle Control Tower LifeCycle
       Handler: "ct_al_lifecycle.lambda_handler"
       Role: !GetAtt ALLifeCycleRole.Arn
