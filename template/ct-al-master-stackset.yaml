@@ -11,13 +11,7 @@ Parameters:
   SecurityAccount:
     Type: String
     Description: Designated AWS security account
-    AllowedPattern: '^[0-9]{12}$'
-    MinLength: 12
-    MaxLength: 12
-  LogArchiveAccount:
-    Type: String
-    Description: Designated AWS Control Tower Log Archive account
-    AllowedPattern: '^[0-9]{12}$'
+    AllowedPattern: "^[0-9]{12}$"
     MinLength: 12
     MaxLength: 12
   AlertLogicCustomerId:
@@ -26,13 +20,13 @@ Parameters:
   MasterAccount:
     Type: String
     Description: AWS Account ID where the Control Tower deployed
-    AllowedPattern: '^[0-9]{12}$'
+    AllowedPattern: "^[0-9]{12}$"
     MinLength: 12
     MaxLength: 12
   MasterRegion:
     Type: String
-    Description: Region where the Control Tower deployed    
-    Default: 'us-east-1'
+    Description: Region where the Control Tower deployed
+    Default: "us-east-1"
   AlertLogicCentralizedRoleArn:
     Type: String
     Description: ARN of the centralized IAM Role for Cloud Trail Logs access
@@ -40,7 +34,7 @@ Parameters:
     Type: String
     Description: S3 URL of the Alert Logic Role CloudFormation template
   FullRegionCoverage:
-    Type: String 
+    Type: String
     Description: AlertLogic full region deployment scope (yes / no)
     Default: true
     AllowedValues:
@@ -52,10 +46,10 @@ Parameters:
       Comma-delimeted list of tags (Key:Value) to protect.
       This applies to VPCs only and is valid if Full Region Coverage option is set to false.
   AlertLogicDeploymentMode:
-    Type: String 
+    Type: String
     Description: >-
-        Set to 'Automatic' if you want Alert Logic to create subnets for ids and scanning appliances.
-        If you want to deploy Alert Logic appliances yourself, set this option to 'Manual'
+      Set to 'Automatic' if you want Alert Logic to create subnets for ids and scanning appliances.
+      If you want to deploy Alert Logic appliances yourself, set this option to 'Manual'
     Default: Manual
     AllowedValues:
       - Automatic
@@ -70,7 +64,7 @@ Parameters:
     Type: String
     MinLength: 3
     MaxLength: 63
-    AllowedPattern: '[a-zA-Z0-9-.]*'
+    AllowedPattern: "[a-zA-Z0-9-.]*"
     Description: The prefix of the S3 bucket which contains Lambda package. Note that the name of the bucket must contain a region name suffix. The following is the valid backet name syntax = <bucket_name_prefix>.us-east-1
     Default: alertlogic-public-repo
   AlertLogicApiEndpoint:
@@ -81,7 +75,7 @@ Parameters:
       - Production
       - Integration
 
-Mappings: 
+Mappings:
   LambdaVariable:
     Role:
       Hub: AlertLogic-Hub-Assume-Role
@@ -99,9 +93,9 @@ Mappings:
       LifeCycle: "lambda_packages/lifecycle_1.0.1.zip"
       Deployer: "lambda_packages/deployer_1.0.1.zip"
       ScopeDiscovery: "lambda_packages/scope_discovery_1.0.1.zip"
-      
+
 Conditions:
-  OriginRegion: !Equals 
+  OriginRegion: !Equals
     - !Ref MasterRegion
     - !Ref AWS::Region
 
@@ -119,27 +113,11 @@ Conditions:
     - !Ref SecurityAccount
     - !Ref AWS::AccountId
 
-  SecurityAccountOriginRegion: !And
-    - !Equals
-      - !Ref SecurityAccount
-      - !Ref AWS::AccountId
-    - !Equals 
-      - !Ref MasterRegion
-      - !Ref AWS::Region
-
-  LogArchiveOriginRegion: !And
-    - !Equals
-      - !Ref LogArchiveAccount
-      - !Ref AWS::AccountId
-    - !Equals 
-      - !Ref MasterRegion
-      - !Ref AWS::Region
-
 Resources:
   ALRoleFromCFT:
     Condition: OriginRegion
     Type: AWS::CloudFormation::Stack
-    Properties: 
+    Properties:
       Parameters:
         ExternalId: !Ref AlertLogicCustomerId
       TemplateURL: !Ref AlertLogicSourceRoleTemplateUrl
@@ -149,7 +127,7 @@ Resources:
     Type: "AWS::CloudFormation::CustomResource"
     Properties:
       ServiceToken: !Ref RegistrationSNS
-      OrgId: !Ref OrgId  
+      OrgId: !Ref OrgId
       CID: !Ref AlertLogicCustomerId
       AccountId: !Ref AWS::AccountId
       ALCentralizedRoleArn: !Ref AlertLogicCentralizedRoleArn
@@ -160,31 +138,34 @@ Resources:
     Condition: NonSecurityAccount
     Type: AWS::Events::Rule
     Properties:
-      Name: !Join ['-', ['AlertLogic-CT-Deployer-Spoke-Rule', !Ref AlertLogicApiEndpoint]]
-      Description: CT AL - Rule for create / update of vpc and subnet tags 
+      Name:
+        !Join [
+          "-",
+          ["AlertLogic-CT-Deployer-Spoke-Rule", !Ref AlertLogicApiEndpoint],
+        ]
+      Description: CT AL - Rule for create / update of vpc and subnet tags
       EventPattern:
         {
-          "account": [
-            !Ref "AWS::AccountId"
-          ],
-          "source": [
-            "aws.tag"
-          ],
-          "detail-type": [
-            "Tag Change on Resource"
-          ],
-          "detail": {
-            "service": [
-              "ec2"
-            ],
-            "resource-type": [
-              "vpc"
-            ]
-          }
+          "account": [!Ref "AWS::AccountId"],
+          "source": ["aws.tag"],
+          "detail-type": ["Tag Change on Resource"],
+          "detail": { "service": ["ec2"], "resource-type": ["vpc"] },
         }
       State: ENABLED
       Targets:
-        - Arn: !Join ['', ['arn:aws:events:', !Sub '${AWS::Region}', ':', !Sub '${SecurityAccount}', ':event-bus/', !FindInMap [EventBridge, EventBus, Name], !Ref AlertLogicApiEndpoint]]
+        - Arn:
+            !Join [
+              "",
+              [
+                "arn:aws:events:",
+                !Sub "${AWS::Region}",
+                ":",
+                !Sub "${SecurityAccount}",
+                ":event-bus/",
+                !FindInMap [EventBridge, EventBus, Name],
+                !Ref AlertLogicApiEndpoint,
+              ],
+            ]
           Id: "TagCreateUpdateTrigger"
           RoleArn: !GetAtt ALTagSpokeRuleDeliveryRole.Arn
 
@@ -194,34 +175,57 @@ Resources:
     Properties:
       Description: CT AL - Role to send event from Spoke account to the Hub account event buses
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-                Service: events.amazonaws.com
+              Service: events.amazonaws.com
             Action:
               - sts:AssumeRole
       Path: /
       Policies:
         - PolicyName: EventBusDeliveryRolePolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - events:PutEvents
-                Resource: !Join ['', ['arn:aws:events:', !Sub '${AWS::Region}', ':', !Sub '${SecurityAccount}', ':event-bus/', !FindInMap [EventBridge, EventBus, Name], !Ref AlertLogicApiEndpoint]]
+                Resource:
+                  !Join [
+                    "",
+                    [
+                      "arn:aws:events:",
+                      !Sub "${AWS::Region}",
+                      ":",
+                      !Sub "${SecurityAccount}",
+                      ":event-bus/",
+                      !FindInMap [EventBridge, EventBus, Name],
+                      !Ref AlertLogicApiEndpoint,
+                    ],
+                  ]
 
   ALScopeDiscoveryRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ['-', ['AlertLogic-ScopeDiscovery-Role', !Ref AlertLogicApiEndpoint, !Ref "AWS::Region"]]
+      RoleName:
+        !Join [
+          "-",
+          [
+            "AlertLogic-ScopeDiscovery-Role",
+            !Ref AlertLogicApiEndpoint,
+            !Ref "AWS::Region",
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
       Description: CT AL - Role used by lambda for discovering AlertLogic MDR protection scope
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-          -
-            Effect: "Allow"
+          - Effect: "Allow"
             Principal:
               Service:
                 - "lambda.amazonaws.com"
@@ -229,39 +233,50 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
-      - PolicyName: ALScopeDiscoveryCloudWatchPolicy
-        PolicyDocument:
-          Version: 2012-10-17
-          Statement:
-          - Effect: Allow
-            Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Resource:
-              -  !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
-      - PolicyName: ALScopeDiscoveryEC2Policy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-              - ec2:DescribeVpcs
-              - ec2:DescribeSubnets
-            Resource: "*"
-      - PolicyName: AlertLogicPublishScopeDiscovery
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-              - sns:Publish
-            Resource: !Ref RegistrationSNS
+        - PolicyName: ALScopeDiscoveryCloudWatchPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+        - PolicyName: ALScopeDiscoveryEC2Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                Resource: "*"
+        - PolicyName: AlertLogicPublishScopeDiscovery
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref RegistrationSNS
 
   ALScopeDiscovery:
     Type: "AWS::Lambda::Function"
     Properties:
-      FunctionName: !Join ['-', ['AlertLogic-CT-Scope-Discovery', !Ref AlertLogicApiEndpoint]]
+      FunctionName:
+        !Join [
+          "-",
+          [
+            "AlertLogic-CT-Scope-Discovery",
+            !Ref AlertLogicApiEndpoint,
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
       Description: CT AL - Function to handle AlertLogic MDR Scope discovery
       Handler: "ct_al_scope_discovery.lambda_handler"
       Role: !GetAtt ALScopeDiscoveryRole.Arn
@@ -274,19 +289,30 @@ Resources:
       ReservedConcurrentExecutions: 10
       Environment:
         Variables:
-            RegistrationSNS: !Ref RegistrationSNS
+          RegistrationSNS: !Ref RegistrationSNS
 
   ALDeployerRole:
     Condition: SecurityAccount
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Join ['-', [!FindInMap [LambdaVariable,Role, Deployer], !Ref AlertLogicApiEndpoint, !Ref "AWS::Region"]]
+      RoleName:
+        !Join [
+          "-",
+          [
+            !FindInMap [LambdaVariable, Role, Deployer],
+            !Ref AlertLogicApiEndpoint,
+            !Ref "AWS::Region",
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
       Description: CT AL - Role used by lambda for AlertLogic appliance deployment
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-          -
-            Effect: "Allow"
+          - Effect: "Allow"
             Principal:
               Service:
                 - "lambda.amazonaws.com"
@@ -294,31 +320,42 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
-      - PolicyName: ALDeployerPolicy
-        PolicyDocument:
-          Version: 2012-10-17
-          Statement:
-          - Effect: Allow
-            Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Resource:
-              -  !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
-      - PolicyName: SecretManager
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-              - secretsmanager:GetSecretValue
-            Resource: !Ref Secret
+        - PolicyName: ALDeployerPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+        - PolicyName: SecretManager
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref Secret
 
   ALDeployer:
     Condition: SecurityAccount
     Type: "AWS::Lambda::Function"
     Properties:
-      FunctionName: !Join ['-', ['AlertLogic-CT-Deployer', !Ref AlertLogicApiEndpoint]]
+      FunctionName:
+        !Join [
+          "-",
+          [
+            "AlertLogic-CT-Deployer",
+            !Ref AlertLogicApiEndpoint,
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
       Description: CT AL - Function to handle AlertLogic appliance deployment
       Handler: "ct_al_deployer.lambda_handler"
       Role: !GetAtt ALDeployerRole.Arn
@@ -332,57 +369,79 @@ Resources:
       ReservedConcurrentExecutions: 10
       Environment:
         Variables:
-            assume_role: !FindInMap [LambdaVariable,Role, Spoke]
-            master_account: !Ref MasterAccount
-            master_role: !FindInMap [LambdaVariable,Role, Hub]
-            org_id: !Ref OrgId
-            secret: !Ref Secret
-            FullRegionCoverage: !Ref FullRegionCoverage
-            CoverageTags: !Join [ ",", !Ref CoverageTags]
-            AlertLogicApiEndpoint: !Ref AlertLogicApiEndpoint
+          assume_role: !FindInMap [LambdaVariable, Role, Spoke]
+          master_account: !Ref MasterAccount
+          master_role: !FindInMap [LambdaVariable, Role, Hub]
+          org_id: !Ref OrgId
+          secret: !Ref Secret
+          FullRegionCoverage: !Ref FullRegionCoverage
+          CoverageTags: !Join [",", !Ref CoverageTags]
+          AlertLogicApiEndpoint: !Ref AlertLogicApiEndpoint
 
   ALEventBus:
     Condition: SecurityAccount
     Type: AWS::Events::EventBus
     Properties:
-      Name: !Join ['', [!FindInMap [EventBridge, EventBus, Name], !Ref AlertLogicApiEndpoint]]
+      Name:
+        !Join [
+          "",
+          [
+            !FindInMap [EventBridge, EventBus, Name],
+            !Ref AlertLogicApiEndpoint,
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
 
   ALEventBusPolicy:
     Condition: SecurityAccount
     Type: AWS::Events::EventBusPolicy
     Properties:
-        Action: "events:PutEvents"
-        Principal: "*"
-        StatementId: !Join ['', ["AllowSpokeAccountPutEventsToHubAccount", !Ref AlertLogicApiEndpoint]]
-        EventBusName: !Ref ALEventBus
-        Condition:
-            Type: "StringEquals"
-            Key: "aws:PrincipalOrgID"
-            Value: !Ref OrgId
+      Action: "events:PutEvents"
+      Principal: "*"
+      StatementId:
+        !Join [
+          "",
+          [
+            "AllowSpokeAccountPutEventsToHubAccount",
+            !Ref AlertLogicApiEndpoint,
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
+      EventBusName: !Ref ALEventBus
+      Condition:
+        Type: "StringEquals"
+        Key: "aws:PrincipalOrgID"
+        Value: !Ref OrgId
 
   ALDeployerTagHubRule:
     Condition: SecurityAccount
     Type: AWS::Events::Rule
     Properties:
-      Name: !Join ['-', ['AlertLogic-CT-Deployer-Hub-Rule', !Ref AlertLogicApiEndpoint]]
+      Name:
+        !Join [
+          "-",
+          [
+            "AlertLogic-CT-Deployer-Hub-Rule",
+            !Ref AlertLogicApiEndpoint,
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
       Description: CT AL - Trigger for Lambda function AlertLogic-CT-Deployer
       EventBusName: !Ref ALEventBus
       EventPattern:
         {
-          "source": [
-            "aws.tag"
-          ],
-          "detail-type": [
-            "Tag Change on Resource"
-          ],
-          "detail": {
-            "service": [
-              "ec2"
-            ],
-            "resource-type": [
-              "vpc"
-            ]
-          }
+          "source": ["aws.tag"],
+          "detail-type": ["Tag Change on Resource"],
+          "detail": { "service": ["ec2"], "resource-type": ["vpc"] },
         }
       State: ENABLED
       Targets:
@@ -402,27 +461,25 @@ Resources:
     Condition: SecurityAccount
     Type: AWS::Events::Rule
     Properties:
-      Name: !Join ['-', ['AlertLogic-CT-Deployer-Local-Rule', !Ref AlertLogicApiEndpoint]]
+      Name:
+        !Join [
+          "-",
+          [
+            "AlertLogic-CT-Deployer-Local-Rule",
+            !Ref AlertLogicApiEndpoint,
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ],
+          ],
+        ]
       Description: CT AL - Local trigger for Lambda function AlertLogic-CT-Deployer
       EventPattern:
         {
-          "account": [
-            !Ref "AWS::AccountId"
-          ],
-          "source": [
-            "aws.tag"
-          ],
-          "detail-type": [
-            "Tag Change on Resource"
-          ],
-          "detail": {
-            "service": [
-              "ec2"
-            ],
-            "resource-type": [
-              "vpc"
-            ]
-          }
+          "account": [!Ref "AWS::AccountId"],
+          "source": ["aws.tag"],
+          "detail-type": ["Tag Change on Resource"],
+          "detail": { "service": ["ec2"], "resource-type": ["vpc"] },
         }
       State: ENABLED
       Targets:
@@ -445,7 +502,7 @@ Resources:
       ServiceToken: !GetAtt ALScopeDiscovery.Arn
       RegistrationSNS: !Ref RegistrationSNS
       FullRegionCoverage: !Ref FullRegionCoverage
-      CoverageTags: !Join [ ",", !Ref CoverageTags]
+      CoverageTags: !Join [",", !Ref CoverageTags]
 
   ScopeDiscoveryALMasterRegion:
     Condition: OriginRegion
@@ -454,13 +511,14 @@ Resources:
       ServiceToken: !GetAtt ALScopeDiscovery.Arn
       RegistrationSNS: !Ref RegistrationSNS
       FullRegionCoverage: !Ref FullRegionCoverage
-      CoverageTags: !Join [ ",", !Ref CoverageTags]
+      CoverageTags: !Join [",", !Ref CoverageTags]
     DependsOn:
-    - RegisterRole
+      - RegisterRole
 
 Outputs:
   ExternalId:
     Value:
       Ref: AlertLogicCustomerId
-    Description: An external ID identifies Alert Logic as allowed access to the AWS
+    Description:
+      An external ID identifies Alert Logic as allowed access to the AWS
       resources defined in this IAM Role.
