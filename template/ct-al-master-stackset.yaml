@@ -14,6 +14,12 @@ Parameters:
     AllowedPattern: "^[0-9]{12}$"
     MinLength: 12
     MaxLength: 12
+  LogArchiveAccount:
+    Type: String
+    Description: Designated AWS Control Tower Log Archive account
+    AllowedPattern: '^[0-9]{12}$'
+    MinLength: 12
+    MaxLength: 12
   AlertLogicCustomerId:
     Type: String
     Description: AlertLogic Customer Id
@@ -112,6 +118,22 @@ Conditions:
   SecurityAccount: !Equals
     - !Ref SecurityAccount
     - !Ref AWS::AccountId
+
+  SecurityAccountOriginRegion: !And
+    - !Equals
+      - !Ref SecurityAccount
+      - !Ref AWS::AccountId
+    - !Equals
+      - !Ref MasterRegion
+      - !Ref AWS::Region
+
+  LogArchiveOriginRegion: !And
+    - !Equals
+      - !Ref LogArchiveAccount
+      - !Ref AWS::AccountId
+    - !Equals
+      - !Ref MasterRegion
+      - !Ref AWS::Region
 
 Resources:
   ALRoleFromCFT:
